@@ -1,0 +1,57 @@
+#!groovy
+/*
+=======================================
+Author: DevOps
+Date: 05/12/2020
+Purpose: To build frontend java project
+=======================================
+*/
+
+pipeline {
+ 
+ agent {
+
+     label 'master'
+ }
+ 
+ tools {
+
+     maven 'mymaven'
+     jdk 'java11'
+ }
+
+ stages {
+ 
+	stage ('Code Checkout'){
+	steps {
+	git credentialsId: 'devops_git', url: 'https://github.com/devopstrainers1/addressbook.git'
+	}
+	}
+
+     stage('Validate Project') {
+     steps {
+
+         script{
+			
+			sh """
+             mvn validate
+			 
+			 """
+         }
+     }
+     }
+
+     stage('Code Compile') {
+     steps {
+
+         script{
+			
+			sh """
+             mvn compile
+			 """
+         }
+     }
+     }
+ }
+
+}
