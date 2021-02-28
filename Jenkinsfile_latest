@@ -1,139 +1,109 @@
-#!groovy
-/*
-=======================================
-Author: DevOps
-Date: 05/12/2020
-Purpose: To build frontend java project
-=======================================
-*/
-
 pipeline {
- 
- agent {
+          agent {         
+             label 'master'
+          }
+          tools {
+              maven 'maven3'
+              jdk 'java1.8'
 
-     label 'master'
- }
- 
- tools {
+          }
+          
+          stages {
+            stage ('Parallel'){
+             parallel {
+                    stage('Validate the code') {
+                        steps {
+                            script {
+                                sh """
+                                mvn validate
+                                """       
+                                }
+                        }
 
-     maven 'mymaven'
-     jdk 'java11'
- }
-
- stages {
- 
-	stage ('Code Checkout'){
-	steps {
-	git credentialsId: 'devops_git', url: 'https://github.com/devopstrainers1/addressbook.git'
-	}
-	}
-
-     stage('Validate Project') {
-     steps {
-
-         script{
-			
-			sh """
-             mvn validate
-			 
-			 """
-         }
-     }
-     }
-
-     stage('Code Compile') {
-     steps {
-
-         script{
-			
-			sh """
-             mvn compile
-			 """
-         }
-     }
-     }
-
-    stage('Code Test') {
-    steps {
-        script{
-			
-			sh """
-             mvn test
-			 """
-         }
-
-    }
+        }
+                    stage('Code Compile') {
+                        steps {
+                            script {
+                                sh """
+                                mvn compile
+                                """       
+                                }
+                        }
+                        
+        }
+            }
+            }
+            stage('Code Test') {
+                steps {
+                    catchError (buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    script {
+                        sh """
+                        mvn test
+                        """       
+                         }
+                    }
+                   
+                  
+                }
+                
+}
+            stage('Package') {
+                steps {
+                    script {
+                        sh """
+                        mvn package
+                        """       
+                         }
+                }
+                
 }
 
-stage('Package') {
-    steps {
-        script{
-			
-			sh """
-             mvn package
-			 """
-         }
+            stage('Git Version'){
+            steps{
+                script{
+                    git_version = sh (returnStdout: true, script: '''
+                        git rev-parse --short HEAD
+                    ''')
 
-    }
-}
+                    branch_name = "7.7"
+                    final_version = "${env.BUILD_NUMBER}.$git_version"
+                    echo "git version is $git_version"
+                    echo "branch_name is $branch_name"
+                    echo  "final_version is $final_version"
 
-stage('Create Zip') {
-    steps {
-        script{
-			
-			sh """
-             cd "${env.WORKSPACE}/target/"
-             zip FrontEnd.zip addressbook-2.0.war
-			 """
-         }
+                }
 
-    }
-}
+            }
 
-stage ('Publish to Nexus'){
+            }
+            stage('zip package'){
+                steps{
+                    script {
+                        sh """
+                        zip target/addressbook.zip target/addressbook-2.0.war
+                        """
 
-    steps{
+                    }
 
-        script {
-            artifactId = "development"
-            artifactdir = "${env.WORKSPACE}/target/"
-            artifactfile = "FrontEnd"
-            groupid = "${env.BRANCH_NAME}"
-            sh """
-            git_version=`git rev-parse --short HEAD`
-            """
-        nexusArtifactUploader(
-                nexusVersion: 'nexus3',
-                protocol: 'http',
-                version: "${git_version}",
-                groupId: "${groupid}",
-                credentialsId: 'nexus_ID',
-                repository: 'Devops_Repo',
-                nexusUrl: '34.67.47.43:8081',
-                artifacts: 
-                [
-                    [artifactId: artifactId, file: artifactdir + artifactfile + '.zip', type: 'zip']
-                    
-                    ]
+                }
 
-        ); 
-    }
+            }
+
+            stage('Nexus Upload'){
+                steps{
+                    script {
+                        nexusArtifactUploader (
+                            credentialsId: "nexus_cred", 
+                            groupId: "${branch_name}", 
+                            nexusUrl: "localhost:8081", 
+                            nexusVersion: "nexus3", 
+                            protocol: "http", 
+                            repository: "devops30",
+                            version: "${final_version}",
+                            artifacts: 
+                            [[artifactId: 'Web', classifier: '', file: 'target\\addressbook.zip', type: 'zip']]
+                        );                     }
+                }
+            }
 }
 }
- }
-
- 
-post{
-    
-    always{
-
-    dir("${env.WORKSPACE}@tmp"){
-        deleteDir()
-    }
-    
-}
-}
-	 
-}
-
- 
